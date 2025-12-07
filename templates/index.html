@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>IoT Platform — Devices</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"/>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: 1fr 380px; gap: 18px; align-items:start; }
+    .card { background: #fff; border: 1px solid #eee; padding: 14px; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+    h1 { margin: 0 0 8px 0; }
+    form label { display:block; margin-top:8px; font-size:0.9rem; color:#333; }
+    form input, form textarea { width:100%; padding:8px; margin-top:6px; box-sizing:border-box; border:1px solid #ddd; border-radius:6px; }
+    .muted { color:#666; font-size:0.9rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px;}
+    th, td { padding: 8px 12px; border: 1px solid #ddd; text-align: left; }
+    a.button { display:inline-block; padding:6px 10px; background:#1976d2; color:#fff; border-radius:6px; text-decoration:none; }
+    button.primary { padding:8px 12px; background:#1976d2; color:#fff; border-radius:6px; border:none; cursor:pointer; }
+    pre.apiout { background:#f7f7f7; border:1px dashed #ddd; padding:8px; border-radius:6px; font-size:0.85rem; white-space:pre-wrap; word-wrap:break-word; }
+    .small { font-size:0.85rem; color:#444; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Devices</h1>
+    <p class="muted">Daftar perangkat terdaftar. Bisa mendaftarkan device baru lewat form di kanan. Klik "Open dashboard" untuk melihat nilai sensor.</p>
+
+    <div class="grid">
+      <!-- device list -->
+      <div class="card">
+        <h2>Daftar Device</h2>
+        <table id="devices-table">
+          <thead><tr><th>Device ID</th><th>Name</th><th>Actions</th></tr></thead>
+          <tbody>
+            <!-- diisi oleh JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- registration form -->
+      <div class="card">
+        <h2>Tambah Device</h2>
+        <form id="register-form">
+          <label for="device_id">Device ID (opsional)</label>
+          <input id="device_id" name="device_id" placeholder="kosongkan untuk auto-generate (UUID)">
+
+          <label for="name">Nama device (opsional)</label>
+          <input id="name" name="name" placeholder="Contoh: sensor-ruang-tamu">
+
+          <label for="meta">Meta JSON (opsional)</label>
+          <textarea id="meta" name="meta" rows="4" placeholder='{"location":"ruang tamu","model":"esp32-v1"}'></textarea>
+
+          <div style="margin-top:10px;">
+            <button type="submit" class="primary">Daftarkan device</button>
+          </div>
+        </form>
+
+        <section style="margin-top:12px;">
+          <div class="small">Hasil registrasi (copy & simpan API key):</div>
+          <pre id="reg-result" class="apiout">Belum ada registrasi baru.</pre>
+        </section>
+
+        <section style="margin-top:10px;">
+          <div class="small muted">Catatan keamanan: API key ditampilkan hanya sekali saat pendaftaran. Simpan aman dan jangan commit ke repositori publik.</div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const devicesTableBody = document.querySelector("#devices-table tbody");
+    const registerForm = document.querySelector("#register-form");
+    const regResult = document.getElementById("reg-result");
+
+    // Load devices and populate table
+    async function loadDevices() {
+      try {
+        const res = await fetch("/devices");
+        if (!res.ok) throw new Error("gagal memuat devices");
+        const devices = await res.json(); // object mapping device_id -> info
+        devicesTableBody.innerHTML = "";
+        const keys = Object.keys(devices);
+        if (keys.length === 0) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="3">Belum ada device terdaftar.</td>';
+          devicesTableBody.appendChild(tr);
+          return;
+        }
+        for (const id of keys) {
+          const info = devices[id] || {};
+          const name = (info.meta && info.meta.name) ? info.meta.name : (info.meta && info.meta.device_name ? info.meta.device_name : "");
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td style="font-family:monospace">${id}</td>
+                          <td>${name || "-"}</td>
+                          <td>
+                            <a class="button" href="/dashboard/${id}">Open dashboard</a>
+                          </td>`;
+          devicesTableBody.appendChild(tr);
+        }
+      } catch (err) {
+        console.error(err);
+        devicesTableBody.innerHTML = '<tr><td colspan="3">Gagal memuat device.</td></tr>';
+      }
+    }
+
+    // Register form submit handler
+    registerForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const device_id = document.getElementById("device_id").value.trim();
+      const name = document.getElementById("name").value.trim();
+      const metaRaw = document.getElementById("meta").value.trim();
+
+      let metaObj = {};
+      if (metaRaw) {
+        try {
+          metaObj = JSON.parse(metaRaw);
+        } catch (e) {
+          alert("Field Meta harus berupa JSON valid.");
+          return;
+        }
+      }
+
+      // Build payload
+      const payload = {};
+      if (device_id) payload.device_id = device_id;
+      if (name) payload.name = name;
+      // merge meta into payload.meta (server saves everything under meta)
+      payload.meta = { ...(metaObj || {}) };
+      if (name) payload.meta.name = name;
+
+      try {
+        const res = await fetch("/devices", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          // show error
+          const msg = body && body.error ? body.error : ("HTTP " + res.status);
+          alert("Registrasi gagal: " + msg);
+          return;
+        }
+
+        // success — server returns {device_id, api_key}
+        regResult.textContent = JSON.stringify(body, null, 2);
+        // clear form
+        registerForm.reset();
+        // reload device list
+        await loadDevices();
+
+      } catch (err) {
+        console.error(err);
+        alert("Terjadi kesalahan saat mendaftar device.");
+      }
+    });
+
+    // initial load
+    loadDevices();
+  </script>
+</body>
+</html>

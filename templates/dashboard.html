@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Dashboard — {{ device_name }}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 18px; }
+    .wrap { max-width: 1000px; }
+    .header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .meta { color:#555; }
+    #chart { height: 320px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { padding: 6px 10px; border: 1px solid #ddd; text-align:left; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h2>Dashboard — {{ device_name }}</h2>
+        <div class="meta">Device ID: <code>{{ device_id }}</code></div>
+      </div>
+      <div>
+        <a href="{{ url_for('index') }}">← Back to devices</a>
+      </div>
+    </div>
+
+    <section>
+      <h3>Realtime chart (polling)</h3>
+      <canvas id="chart"></canvas>
+      <p style="font-size:0.9em;color:#666">Grafik ini menampilkan data terakhir. Polling otomatis setiap 3 detik.</p>
+    </section>
+
+    <section>
+      <h3>Last records</h3>
+      <table id="telemetry-table">
+        <thead><tr><th>#</th><th>Timestamp</th><th>Payload</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    const DEVICE_ID = "{{ device_id }}";
+  </script>
+  <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>
